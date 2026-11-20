@@ -28,3 +28,17 @@
 /open.ps1
 /run-hidden.ps1
 /scan.ps1
+
+# Local editor / tool state (never shareable)
+.obsidian/
+.claude/settings.local.json
+
+# OMC runtime state; project-scoped skills stay committable
+.omc/*
+!.omc/skills/
+!.omc/skills/**
+
+# OS clutter
+Thumbs.db
+Desktop.ini
+.DS_Store
