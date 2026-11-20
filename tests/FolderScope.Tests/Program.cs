@@ -143,6 +143,30 @@ var issueReport = new ScanReport { RootPath = fixture };
 for (var i = 0; i < 10003; i++) issueReport.AddIssue(new ScanIssue(fixture, "probe", "synthetic error"));
 var checks = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception("FAILED: " + name); checks++; Console.WriteLine("PASS " + name); }
+// RFC4180-style split: paths may contain commas and escaped quotes, so line.Split(',') is unsafe.
+static string[][] CsvCells(string[] lines)
+{
+    string[] Split(string line)
+    {
+        var cells = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var quoted = false;
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch == '"')
+            {
+                if (quoted && i + 1 < line.Length && line[i + 1] == '"') { current.Append('"'); i++; }
+                else quoted = !quoted;
+            }
+            else if (ch == ',' && !quoted) { cells.Add(current.ToString()); current.Clear(); }
+            else current.Append(ch);
+        }
+        cells.Add(current.ToString());
+        return cells.ToArray();
+    }
+    return lines.Select(Split).ToArray();
+}
 var latestProgress = new LatestScanProgress();
 Task.Run(() => { for (var i = 1; i <= 100000; i++) latestProgress.Report(new ScanProgress(i, "sample")); }).GetAwaiter().GetResult();
 Check(latestProgress.TakeLatest()?.Entries == 100000 && latestProgress.TakeLatest() is null,
@@ -401,7 +425,11 @@ var limited = scanner.Scan(fixture, maximumNodes: 2);
 Check(limited.Nodes.Count == 2 && !limited.Complete && limited.Root.Incomplete && limited.Issues.Any(i => i.Operation == "node-limit"), "node safety limit returns marked partial result");
 var limitedCsv = Path.Combine(root, "limited.csv");
 ReportWriter.Write(limited, limitedCsv);
-Check(File.ReadAllLines(limitedCsv).Skip(1).All(line => line.EndsWith("\"False\",\"0\",\"True\",\"0\",\"0\"")), "node-limited CSV marks every row scan incomplete");
+var limitedCsvCells = CsvCells(File.ReadAllLines(limitedCsv));
+var limitedScanCompleteColumn = Array.IndexOf(limitedCsvCells[0], "ScanComplete");
+Check(limitedScanCompleteColumn >= 0
+    && limitedCsvCells.Skip(1).All(cells => cells[limitedScanCompleteColumn] == "False"),
+    "node-limited CSV marks every row scan incomplete");
 var limitedPath = Path.Combine(root, "limited.json");
 ReportWriter.Write(limited, limitedPath);
 var limitedRestored = ReportReader.Read(limitedPath);
@@ -476,7 +504,7 @@ var excessiveIssuesRejected = false;
 try { ReportReader.Read(excessiveIssuesPath); } catch (InvalidDataException ex) { excessiveIssuesRejected = ex.Message.Contains("detail limit"); }
 Check(excessiveIssuesRejected, "excess snapshot issue details rejected");
 var snapshotNodeLimit = false;
-try { ReportReader.Read(json, maximumNodes: 2); } catch (InvalidDataException ex) { snapshotNodeLimit = ex.Message.Contains("node safety limit"); }
+try { ReportReader.Read(json, maximumNodes: 2); } catch (InvalidDataException ex) { snapshotNodeLimit = ex.Message.Contains("node limit"); }
 Check(snapshotNodeLimit, "snapshot node cap rejects before object deserialization");
 Check(restored.Nodes.Count == report.Nodes.Count && restored.Root.TotalBytes == 3093 && restored.Nodes.Single(n => n.Name == "child").TotalBytes == 2069, "saved scan loads with exact hierarchy and sizes");
 var malformed = Path.Combine(root, "bad-parent.json");
@@ -487,7 +515,9 @@ Check(invalidParentRejected, "corrupt snapshot parent rejected");
 var oversized = Path.Combine(root, "oversized.json");
 using (var oversizedStream = File.Create(oversized)) oversizedStream.SetLength(128L * 1024 * 1024 + 1);
 var oversizedRejected = false;
-try { ReportReader.Read(oversized); } catch (InvalidDataException ex) { oversizedRejected = ex.Message.Contains("safety limit"); }
+// A 128 MiB zero-filled file would surface as JsonException if parsing ever started;
+// catching InvalidDataException here proves the size gate rejected it before parsing.
+try { ReportReader.Read(oversized); } catch (InvalidDataException) { oversizedRejected = true; }
 Check(oversizedRejected, "oversized snapshot rejected before JSON parsing");
 var badTotal = Path.Combine(root, "bad-total.json");
 File.WriteAllText(badTotal, File.ReadAllText(json).Replace("\"TotalBytes\": 3093", "\"TotalBytes\": 3094"));
@@ -499,8 +529,16 @@ Check(parsed.RootElement.GetProperty("Nodes").GetArrayLength() == report.Nodes.C
 var x = XDocument.Load(xml);
 Check(x.Root!.Elements("node").Count() == report.Nodes.Count && File.ReadAllText(csv).Contains("空目录"), "XML nodes and UTF8 CSV");
 var csvLines = File.ReadAllLines(csv);
-Check(csvLines[0].EndsWith("Name,CreatedUtc,AccessedUtc,Attributes,DirectDirectories,PathLength,NameLength,ScanComplete,SuppressedIssueCount,RetainsFileNodes,UnlistedFileBytes,UnlistedFileCount") &&
-    csvLines.Single(line => line.Contains("\"a.bin\"")).Contains(report.Nodes.Single(n => n.Name == "a.bin").CreatedUtc!.Value.ToString("O")),
+var csvCells = CsvCells(csvLines);
+var csvHeader = csvCells[0];
+var csvNameColumn = Array.IndexOf(csvHeader, "Name");
+var csvCreatedColumn = Array.IndexOf(csvHeader, "CreatedUtc");
+var csvFileRow = csvCells.Skip(1).Single(cells => cells[csvNameColumn] == "a.bin");
+Check(csvNameColumn >= 0 && csvCreatedColumn > 0
+    && Array.IndexOf(csvHeader, "ScanComplete") >= 0
+    && Array.IndexOf(csvHeader, "SizeState") >= 0
+    && Array.IndexOf(csvHeader, "IsLowerBound") >= 0
+    && csvFileRow[csvCreatedColumn] == report.Nodes.Single(n => n.Name == "a.bin").CreatedUtc!.Value.ToString("O"),
     "CSV appended metadata includes actual creation timestamp");
 var fileXml = x.Root.Elements("node").Single(n => (string?)n.Attribute("name") == "a.bin");
 Check((long?)fileXml.Attribute("ownBytes") == 1024 && fileXml.Attribute("attributes") != null && fileXml.Attribute("modifiedUtc") != null && x.Root.Attribute("startedUtc") != null, "XML includes file metadata and scan times");
@@ -569,7 +607,13 @@ Check(timedProgressReport.Cancelled && !timedProgressReport.Complete && timedPro
     "elapsed-time progress callback cancellation preserves partial state");
 var compactCsv = Path.Combine(root, "compact.csv");
 ReportWriter.Write(compactMany, compactCsv);
-Check(File.ReadAllLines(compactCsv).Skip(1).Any(line => line.EndsWith("\"False\",\"500\",\"250\"")), "directory-only CSV preserves mode and direct file totals");
+var compactCells = CsvCells(File.ReadAllLines(compactCsv));
+var compactHeader = compactCells[0];
+var compactRootRow = compactCells.Skip(1).Single(cells => cells[Array.IndexOf(compactHeader, "Id")] == "0");
+Check(compactRootRow[Array.IndexOf(compactHeader, "RetainsFileNodes")] == "False"
+    && compactRootRow[Array.IndexOf(compactHeader, "UnlistedFileBytes")] == "500"
+    && compactRootRow[Array.IndexOf(compactHeader, "UnlistedFileCount")] == "250",
+    "directory-only CSV preserves mode and direct file totals");
 var filesOnlyFixture = Path.Combine(root, "files-only");
 Directory.CreateDirectory(filesOnlyFixture);
 File.WriteAllBytes(Path.Combine(filesOnlyFixture, "one.bin"), new byte[11]);

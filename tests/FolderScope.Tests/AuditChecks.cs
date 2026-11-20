@@ -15,10 +15,13 @@ internal static class AuditChecks
 
     public static void Run()
     {
-        var project = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../../")));
-        if (!project.Equals(@"D:\mypj5\nixiang\folder-size-ai", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Audit fixture must stay inside the authorized D: project.");
-        var scratch = Path.Combine(project, "research", "audit-tiny-" + Guid.NewGuid().ToString("N"));
+        var project = ResolveProjectRoot();
+        var research = Path.Combine(project, "research");
+        var scratch = Path.Combine(research, "audit-tiny-" + Guid.NewGuid().ToString("N"));
+        if (!string.Equals(Path.GetDirectoryName(scratch), research, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("审计临时目录必须是 <项目根>/research 的直接子目录。");
+        if (Directory.Exists(research) && (File.GetAttributes(research) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("<项目根>/research 不能是符号链接或重解析点。");
         Directory.CreateDirectory(scratch);
         var failures = new List<string>();
         var count = 0;
@@ -719,5 +722,23 @@ internal static class AuditChecks
                 && (File.GetAttributes(resolved) & FileAttributes.ReparsePoint) == 0)
                 Directory.Delete(resolved, recursive: true);
         }
+    }
+
+    private static string ResolveProjectRoot()
+    {
+        var configured = Environment.GetEnvironmentVariable("FLASHSCOPE_AUDIT_ROOT");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(configured));
+            if (!Directory.Exists(Path.Combine(full, "src", "FolderScope.Core")))
+                throw new InvalidOperationException(
+                    "FLASHSCOPE_AUDIT_ROOT 未指向 Flash-X 仓库根目录（缺少 src/FolderScope.Core）：" + full);
+            return full;
+        }
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "src", "FolderScope.Core", "FolderScope.Core.csproj")))
+                return directory.FullName;
+        throw new InvalidOperationException(
+            "未找到 Flash-X 仓库根目录。请设置环境变量 FLASHSCOPE_AUDIT_ROOT=<仓库根目录> 后重试。");
     }
 }
