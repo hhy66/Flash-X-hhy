@@ -26,10 +26,11 @@
 | [I-012](#i-012-品牌名与命名空间不一致) | 品牌名与命名空间不一致 | P3 | ⛔ |
 | [I-013](#i-013-测试-harness-首错即停) | 测试 harness 首错即停 | P2 | ⛔ |
 | [I-014](#i-014-仓库内-127-mb-截图) | 仓库内 1.27 MB 截图 | P3 | ⛔ |
-| [I-015](#i-015-聊天复制按钮未处理剪贴板异常) | 聊天"复制"按钮未处理剪贴板异常 | P2 | ⛔ |
+| [I-015](#i-015-聊天复制按钮未处理剪贴板异常) | 聊天"复制"按钮未处理剪贴板异常 | P2 | ✅ |
 | [I-016](#i-016-扫描后的目录索引未传内存预算) | 扫描后的目录索引未传内存预算 | P3 | ⛔ |
-| [I-017](#i-017-扫描后明细校验的异常类型缺失可能崩溃) | 扫描后明细校验的异常类型缺失，可能崩溃 | P1 | ⛔ |
+| [I-017](#i-017-扫描后明细校验的异常类型缺失可能崩溃) | 扫描后明细校验的异常类型缺失，可能崩溃 | P1 | ✅ |
 | [I-018](#i-018-两处异常文案断言与实现不一致) | 两处异常文案断言与实现不一致 | P0 | ✅ |
+| [I-019](#i-019-损坏的桌面设置文件导致启动崩溃) | 损坏的桌面设置文件导致启动崩溃 | P1 | ✅ |
 
 ---
 
@@ -505,7 +506,7 @@ I-001 这种"一个断言坏掉导致 52 项未知"的情况会反复发生；�
 
 ## I-015 聊天"复制"按钮未处理剪贴板异常
 
-- **优先级**：P2　**状态**：⛔
+- **优先级**：P2　**状态**：✅ 已修（与 I-017 同批）
 - **位置**：`src/FolderScope.Desktop/AnalysisChat.cs:162`
 
 ### 现象
@@ -525,13 +526,21 @@ try { Clipboard.SetText(text.ToString()); ... }
 catch (System.Runtime.InteropServices.ExternalException ex) { summary.Text = "剪贴板暂不可用：" + ex.Message; }
 ```
 
-### 建议改法
+### 修复
 
-照抄 `ShowIssues` 的处理方式：捕获 `ExternalException`，在状态行提示，按钮文案不变。
+与 `ShowIssues` 保持一致，捕获 `ExternalException` 并在状态行提示，按钮文案不变：
 
-### 验收标准
+```csharp
+copy.Click += (_, _) =>
+{
+    try { Clipboard.SetText(text); copy.Content = "已复制"; }
+    catch (System.Runtime.InteropServices.ExternalException ex) { SetStatus("剪贴板暂不可用：" + ex.Message); }
+};
+```
 
-占用剪贴板时点击"复制"不崩溃，出现中文提示。
+### 验收结果
+
+- 构建 0 warning；剪贴板被占用时不再抛出未处理异常。
 
 ---
 
@@ -572,8 +581,8 @@ var index = DirectoryIndex.Create(report, cancellationToken: token, sortChildren
 
 ## I-017 扫描后明细校验的异常类型缺失，可能崩溃
 
-- **优先级**：P1　**状态**：⛔
-- **位置**：`src/FolderScope.Desktop/Program.cs:564-573`、`:607`
+- **优先级**：P1　**状态**：✅ 已修（T4）
+- **位置**：`src/FolderScope.Desktop/Program.cs:564-573`、`:607`（修复前行号）
 
 ### 现象
 
@@ -595,16 +604,24 @@ catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or J
 
 `LoadReport` 的同类捕获**包含** `InvalidDataException`（`:1342`、`:1383`），说明这是扫描路径的遗漏，不是设计选择。
 
-### 建议改法
+### 修复
 
-1. `:571` 的过滤条件加入 `or InvalidDataException`。
-2. `:607` 的外层 catch 加入 `InvalidDataException` 与 `JsonException`（与 `LoadReport` 对齐）。
-3. （可选，更稳）所有 `async void` 事件入口统一包一层 `try/catch`，把未预期异常写入生命周期日志并弹提示，而不是让进程消失。
+排查时发现同一根因共有 **4 处**调用点，全部补齐：
 
-### 验收标准
+| 位置 | 场景 | 处理 |
+|---|---|---|
+| `ValidateAssociation` 外层 | 明细文件被截断/替换 | 加入 `InvalidDataException`，降级为"文件明细不可用" |
+| `StartScan` 外层 catch | 任何未预期失败 | 加入 `InvalidDataException` / `JsonException`，与 `LoadReport` 对齐 |
+| `LoadDirectFiles` | 读取明细页时文件损坏 | 加入 `InvalidDataException`，显示"文件明细未读取" |
+| `ScanHistory.Save` 外层 | 概览/索引校验失败 | 加入 `InvalidDataException`，显示"自动保存未完成" |
 
-- 人为构造损坏的 `details.jsonl` 后扫描，界面显示"文件明细不可用"，程序不退出。
-- `StartScan` 的捕获类型集合与 `LoadReport` 一致。
+另外发现两处**启动期**同类问题，见 I-019。
+
+### 验收结果
+
+- 四个项目构建 0 warning / 0 error。
+- 核心 134、审计 39、故障注入 12、看护 7、模型 64 全部通过。
+- `StartScan` 的捕获类型集合已与 `LoadReport` 一致。
 
 ---
 
@@ -640,3 +657,55 @@ FAILED: snapshot node cap rejects before object deserialization
 ### 验收结果
 
 - 核心套件 `Completed 134 checks`，退出码 0。
+
+---
+
+## I-019 损坏的桌面设置文件导致启动崩溃
+
+- **优先级**：P1　**状态**：✅ 已修（T4 排查中发现）
+- **位置**：`src/FolderScope.Desktop/Program.cs:466`（修复前行号）；抛错方为 `DesktopSettings.cs:26-27`
+
+### 现象
+
+`ScanWindow` 构造函数里读取桌面设置：
+
+```csharp
+try { var settings = DesktopSettings.Load(); ... }
+catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+{ _status.Text = "设置未恢复：" + ex.Message; }
+```
+
+而 `DesktopSettings.Load` 对非法窗口尺寸和内存预算抛出的是 **`InvalidDataException`**：
+
+```csharp
+if (!double.IsFinite(value.Width) || !double.IsFinite(value.Height))
+    throw new InvalidDataException("窗口尺寸无效");
+if (value.MemoryBudgetGiB is not (2 or 4 or 8 or 16))
+    throw new InvalidDataException("扫描内存预算必须是2、4、8或16 GiB");
+```
+
+它既不是 `IOException` 也不是 `JsonException`，因此**不被捕获**。
+
+### 复现
+
+把程序目录下的 `folderscope.settings.json` 改成：
+
+```json
+{ "MemoryBudgetGiB": 3 }
+```
+
+启动程序 → 构造函数抛异常 → 直接传播到 `Program.Main` → **进程退出，窗口从未出现**，也没有任何提示。
+
+### 后果
+
+比 I-017 更严重：I-017 至少发生在扫描过程中，而这里用户连界面都看不到，只能靠猜测是"打不开"。触发条件也不算罕见——手工改配置、旧版本残留、外部工具写入不完整 JSON 都可能造成。
+
+### 修复
+
+1. 捕获列表加入 `InvalidDataException`，降级为状态栏提示"设置未恢复"。
+2. 新增回归测试（`tests/FolderScope.ModelTests/Program.cs`）：备份现有设置 → 写入非法内存预算 → 构造 `ScanWindow` → 断言 `_status` 以"设置未恢复"开头 → 恢复文件。该测试在修复前会因构造函数抛异常而整轮失败。
+
+### 验收结果
+
+- 模型测试 `PASS 64 model configuration checks`（原 63，新增 1 项）。
+- 四个项目构建 0 warning / 0 error。

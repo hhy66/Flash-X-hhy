@@ -29,7 +29,7 @@ dotnet run --project tests/FolderScope.Tests/FolderScope.Tests.csproj -c Release
 ### 1.2 模型测试的三种模式
 
 ```powershell
-# 默认：63 项，全部使用模拟 HTTP，不联网
+# 默认：64 项，全部使用模拟 HTTP，不联网
 dotnet run --project tests/FolderScope.ModelTests/FolderScope.ModelTests.csproj -c Release
 
 # 真实调用本机 Codex CLI（需要已 codex login）
@@ -48,7 +48,7 @@ dotnet run --project tests/FolderScope.ModelTests/FolderScope.ModelTests.csproj 
 | 入口 | 结果 | 说明 |
 |---|---|---|
 | 构建（4 项目 Release） | ✅ 0 warning / 0 error | `TreatWarningsAsErrors` 生效 |
-| `ModelTests` | ✅ `PASS 63 model configuration checks. Mock requests only.` | 退出码 0 |
+| `ModelTests` | ✅ `PASS 64 model configuration checks. Mock requests only.` | 退出码 0 |
 | `Tests --watchdog-only` | ✅ `Watchdog timing checks: 7` | 退出码 0 |
 | `Tests --store-fault-only` | ✅ 12 项 PASS | 退出码 0 |
 | `Tests`（默认） | ✅ `Completed 134 checks` | 退出码 0；修复前在第 68 项失败（I-001 / I-018） |

@@ -159,7 +159,13 @@ internal sealed class AnalysisChat : DockPanel
             var copy = new Button { Content = "复制", ToolTip = "复制回复原文", FontSize = 11,
                 MinHeight = 24, Padding = new Thickness(6, 0, 6, 0), HorizontalAlignment = HorizontalAlignment.Left,
                 Background = Brushes.Transparent, BorderThickness = new Thickness(0), Foreground = Brushes.Gray };
-            copy.Click += (_, _) => { Clipboard.SetText(text); copy.Content = "已复制"; };
+            // Another process can hold the clipboard open; that must not surface as an unhandled
+            // dispatcher exception, so report it in the status line exactly like the issue dialog does.
+            copy.Click += (_, _) =>
+            {
+                try { Clipboard.SetText(text); copy.Content = "已复制"; }
+                catch (System.Runtime.InteropServices.ExternalException ex) { SetStatus("剪贴板暂不可用：" + ex.Message); }
+            };
             content.Children.Add(copy);
         }
         _messages.Children.Add(new Border { Child = content,

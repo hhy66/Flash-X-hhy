@@ -99,7 +99,7 @@
 | F02 | OpenAI Responses 协议 | ✅ | 同上 | `openai-responses ...` | 解析 `output_text` / `output[]` |
 | F03 | Anthropic Messages 协议 | ✅ | 同上 | `ant-messages ...` | `x-api-key` + `anthropic-version` |
 | F04 | 本机 Codex CLI 调用 | 🟡 | `Desktop/LocalCodexClient.cs` | `--local-codex-smoke`（需本机已登录） | 子进程 + 临时目录 + 只读沙箱 |
-| F05 | 多厂商/多模型配置 | ✅ | `ModelCatalog` / `ModelProfile` / `ModelConfigurationPane` | 63 项 ModelTests | 12 厂商、99 预置 + Codex |
+| F05 | 多厂商/多模型配置 | ✅ | `ModelCatalog` / `ModelProfile` / `ModelConfigurationPane` | 64 项 ModelTests | 12 厂商、99 预置 + Codex |
 | F06 | 厂商内密钥共享 | ✅ | `ModelGrouping.ShareKeys` | `All models in a provider inherit its key` | 改一个即全厂商生效 |
 | F07 | DPAPI 密钥保护 | ✅ | `ModelSettings.Protect` | `Keys are encrypted on disk` | 解密后清零 |
 | F08 | 连接测试（HTTP / CLI） | ✅ | `ModelConfigurationPane.TestAsync` | `Latest key test succeeded in UI` | 45 秒超时 |

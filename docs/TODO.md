@@ -12,7 +12,7 @@
 |---|---|---|---|---|---|
 | T1 | 修复核心测试 CSV 断言（改为按列名索引） | I-001 / I-018 | 0.5 h | `Completed 134 checks`，无 `FAILED` | ✅ |
 | T2 | 让 `--audit-only` 可移植（环境变量/自动定位项目根，保留 `research/` 围栏） | I-002 | 1 h | `Audit checks: 39 passed, 0 failed`；仍在 `research/` 外拒绝写入 | ✅ |
-| T3 | 修完 T1/T2 后完整复跑 5 个入口并回填 `PROGRESS.md` | — | 0.5 h | 134 / 39 / 12 / 7 / 63 全过，已回填 | ✅ |
+| T3 | 修完 T1/T2 后完整复跑 5 个入口并回填 `PROGRESS.md` | — | 0.5 h | 134 / 39 / 12 / 7 / 64 全过，已回填 | ✅ |
 
 > T1 与 T2 互不依赖，可并行。T3 必须在两者之后。
 
@@ -22,8 +22,8 @@
 
 | ID | 任务 | 关联 | 预估 | 验收标准 | 状态 |
 |---|---|---|---|---|---|
-| T4 | `StartScan` 捕获 `InvalidDataException` / `JsonException`，与 `LoadReport` 对齐 | I-017 | 0.5 h | 损坏明细不导致进程退出 | ⛔ |
-| T5 | 聊天"复制"按钮捕获 `ExternalException` | I-015 | 15 min | 剪贴板被占用时给中文提示、不崩溃 | ⛔ |
+| T4 | `StartScan` 捕获 `InvalidDataException` / `JsonException`，与 `LoadReport` 对齐 | I-017 / I-019 | 0.5 h | 损坏明细与损坏设置均降级为提示，进程不退出；新增回归测试 | ✅ |
+| T5 | 聊天"复制"按钮捕获 `ExternalException` | I-015 | 15 min | 剪贴板被占用时给中文提示、不崩溃 | ✅ |
 | T6 | 建立 `docs/measurements/` 目录，把性能数据从 `research/` 迁出 | I-006 | 15 min | `.gitignore` 不忽略该目录；有 README 说明测量方法 | ⛔ |
 
 ---

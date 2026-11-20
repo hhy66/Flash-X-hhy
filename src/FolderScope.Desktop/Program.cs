@@ -463,7 +463,9 @@ public sealed class ScanWindow : Window
             // Show folder proportions in the table by default; chart remains optional in View.
             SetChartVisible(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        // DesktopSettings.Load reports invalid window size or memory budget as InvalidDataException,
+        // which is not an IOException; without it a corrupt settings file would abort startup.
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
         { _status.Text = "设置未恢复：" + ex.Message; }
         if (!string.IsNullOrWhiteSpace(snapshotPath)) Loaded += async (_, _) => await LoadReport(snapshotPath);
         if (!string.IsNullOrWhiteSpace(initialPath)) { SetTargetPath(initialPath); Loaded += async (_, _) => await StartScan(); }
@@ -568,7 +570,10 @@ public sealed class ScanWindow : Window
                         FileDetailStore.ValidateAssociation(detailPath, report.FileDetailsStoreId);
                         detailStatus = report.FileDetailsStoreId is null ? " · 旧版明细：关联未经验证" : " · 文件明细关联已核对";
                     }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+                    // InvalidDataException is a sibling of IOException, not a subclass: a truncated or
+                    // replaced detail file fails association validation and must degrade to a status
+                    // message rather than escape the async click handler and terminate the process.
+                    catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
                     { detailStatus = " · 文件明细不可用：" + ex.Message; }
                 }
                 if (report.Cancelled || token.IsCancellationRequested)
@@ -580,7 +585,9 @@ public sealed class ScanWindow : Window
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 { detailStatus += " · 自动保存已停止，可手动导出当前结果"; }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+                // History writes go through the same validating readers; a corrupt 4 MiB overview
+                // or detail index surfaces as InvalidDataException, which must not abort the Task.Run body.
+                catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException)
                 { detailStatus += " · 自动保存未完成：" + ex.Message; }
                 return (report, index, detailStatus);
             });
@@ -604,7 +611,7 @@ public sealed class ScanWindow : Window
             _status.ToolTip = _status.Text + "\n点击查看问题明细。" + (_report.Issues.Count > 0 ? "\n" + _report.Issues[0].Path + ": " + _report.Issues[0].Message : "");
             _export.IsEnabled = true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
         {
             _summary.Text = _report is null ? "扫描未完成" : "本次扫描未完成 · 下方仍为上次结果";
             _status.Text = ex.Message + (_report is null ? "" : " · 上次结果目录：" + _report.RootPath);
@@ -933,7 +940,7 @@ public sealed class ScanWindow : Window
             _status.Text = "名称筛选超时，文件明细未显示；请清除或简化筛选条件。";
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { _status.Text = "文件明细读取已取消。"; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or JsonException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or JsonException or System.Security.SecurityException)
         { _status.Text = "文件明细未读取：" + ex.Message; }
         finally { _busy = false; _scan.IsEnabled = true; _export.IsEnabled = _report != null; _cancel.IsEnabled = false; _cancellation.Dispose(); _cancellation = null; }
     }

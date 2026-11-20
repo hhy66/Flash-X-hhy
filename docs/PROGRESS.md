@@ -55,6 +55,10 @@
 | 11 | 修复 I-018：2 处异常文案断言对齐实现 | ✅ | 第 91 项不再失败 | 2026-11-20 |
 | 12 | 修复 I-002：审计项目根参数化 + 围栏加固 | ✅ | `AuditChecks.ResolveProjectRoot` | 2026-11-20 |
 | 13 | 全量复跑 5 个测试入口 | ✅ | 134 / 39 / 12 / 7 / 63 全过 | 2026-11-20 |
+| 14 | 修复 I-017：扫描链路 4 处补齐 `InvalidDataException` / `JsonException` 捕获 | ✅ | 与 `LoadReport` 对齐 | 2026-11-20 |
+| 15 | 修复 I-019：启动期设置损坏不再崩溃 | ✅ | 构造函数降级为状态提示 | 2026-11-20 |
+| 16 | 修复 I-015：剪贴板占用不再抛未处理异常 | ✅ | `AnalysisChat` 状态行提示 | 2026-11-20 |
+| 17 | 新增设置损坏回归测试 | ✅ | 模型测试 63 → 64 | 2026-11-20 |
 
 ---
 
@@ -72,7 +76,7 @@ dotnet build tests/FolderScope.Tests/FolderScope.Tests.csproj -c Release
 
 | # | 命令 | 修复前 | 现在 |
 |---|---|---|---|
-| 1 | `ModelTests`（默认模式） | ✅ 63 | ✅ `PASS 63 model configuration checks`，退出码 0 |
+| 1 | `ModelTests`（默认模式） | ✅ 63 | ✅ `PASS 64 model configuration checks`，退出码 0 |
 | 2 | `Tests --watchdog-only` | ✅ 7 | ✅ `Watchdog timing checks: 7`，退出码 0 |
 | 3 | `Tests --store-fault-only` | ✅ 12 | ✅ 12 项通过，退出码 0 |
 | 4 | `Cli --help` | ✅ | ✅ 退出码 0 |
@@ -107,15 +111,15 @@ dotnet build tests/FolderScope.Tests/FolderScope.Tests.csproj -c Release
 | 1 | 修 `Program.cs:404` CSV 断言（按列名索引） | ✅ 同时修复 `502`、`572`，新增 `CsvCells` 解析 |
 | 2 | 修 `AuditChecks.cs:19` 硬编码路径 | ✅ `ResolveProjectRoot()` + 环境变量 + 围栏加固 |
 | 3 | 修同类异常文案断言（I-018） | ✅ 节点上限与体积上限两项对齐实现 |
-| 4 | 复跑全部入口 | ✅ 134 / 39 / 12 / 7 / 63 全过 |
+| 4 | 复跑全部入口 | ✅ 134 / 39 / 12 / 7 / 64 全过 |
 
 ## 7. 下一阶段（M2 工程化）
 
 | 顺序 | 任务 | 预估 | 关联 |
 |---|---|---|---|
-| 1 | `StartScan` 补齐 `InvalidDataException` / `JsonException` 捕获 | 0.5 h | T4 / I-017 |
-| 2 | 聊天复制按钮捕获 `ExternalException` | 15 min | T5 / I-015 |
-| 3 | 增加 GitHub Actions（Windows，构建 + 测试） | 2 h | T7 / I-011 |
-| 4 | 版本号单点化 | 0.5 h | T8 / I-004 |
+| 1 | 增加 GitHub Actions（Windows，构建 + 测试） | 2 h | T7 / I-011 |
+| 2 | `DesktopSettings` 迁移到 `%LOCALAPPDATA%` | 1.5 h | T9 / I-005 |
+| 3 | 版本号单点化 | 0.5 h | T8 / I-004 |
+| 4 | 进度条接真实进度或删除死代码 | 1 h | T10 / I-003 |
 
 详见 `TODO.md` 的 P1 / P2 区块。

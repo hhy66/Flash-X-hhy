@@ -290,6 +290,27 @@ internal static class Program
             var partialPercent = Percentage(new FolderScope.Core.ScanNode { Name = "partial", Path = "partial", TotalBytes = 20, Incomplete = true });
             Check(unknownPercent.Value is null && unknownPercent.Text == "—" && zeroPercent.Value == 0
                 && partialPercent.Value == 20 && partialPercent.Text.EndsWith("（已读）"), "Percentages distinguish unknown, real zero and partial values");
+            // A corrupt settings file must degrade to a status message. DesktopSettings.Load reports
+            // invalid bounds as InvalidDataException, which is not an IOException, so the window
+            // constructor has to catch it or the application dies before it can show anything.
+            var desktopSettingsPath = FolderScope.Desktop.DesktopSettings.FilePath;
+            var desktopSettingsBackup = File.Exists(desktopSettingsPath) ? File.ReadAllBytes(desktopSettingsPath) : null;
+            try
+            {
+                File.WriteAllText(desktopSettingsPath, "{\"MemoryBudgetGiB\":3}");
+                var corruptSettingsWindow = new ScanWindow(null);
+                try
+                {
+                    Check(Field<TextBlock>(corruptSettingsWindow, "_status").Text.StartsWith("设置未恢复"),
+                        "Corrupt settings degrade to a status message instead of aborting startup");
+                }
+                finally { corruptSettingsWindow.Close(); }
+            }
+            finally
+            {
+                if (desktopSettingsBackup is null) File.Delete(desktopSettingsPath);
+                else File.WriteAllBytes(desktopSettingsPath, desktopSettingsBackup);
+            }
             var tinyScanRoot = Path.Combine(folder, "single-target");
             Directory.CreateDirectory(tinyScanRoot);
             var scopeWindow = new ScanWindow(null);
